@@ -20,3 +20,22 @@
 .App-link {
   color: #09d3ac;
 }
+
+div {
+  display: flex;
+  flex-flow: column nowrap;
+}
+
+div + div {
+  margin-top: 16px;
+}
+
+.error {
+  font-size: 10px;
+  color:red;
+}
+
+label input {
+  display: block;
+  margin: 8px auto;
+}
