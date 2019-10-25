@@ -19,6 +19,7 @@ export const SomeForm: React.FC = function SomeForm() {
       ],
       lastName: [
         Validations.notEqualToField("firstName"),
+        Validations.minLength(4),
       ],
       email: [
         Validations.isPresent,

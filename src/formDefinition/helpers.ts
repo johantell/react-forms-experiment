@@ -1,4 +1,5 @@
-import { FormDefinition, FormStateValue, FormError } from '../formDefinition';
+import { FormDefinition, FormStateValue } from '../formDefinition';
+import { ValidationError } from './validator';
 
 /**
  *
@@ -26,8 +27,8 @@ export function isTouched(form: FormDefinition, key: string) {
 /**
  *
  */
-export function getErrors(form: FormDefinition, fieldName: string): FormError[] {
-  return form.state.errors.filter((error: FormError) => error.name === fieldName)
+export function getErrors(form: FormDefinition, fieldName: string): ValidationError[] {
+  return form.state.errors.filter((error: ValidationError) => error.name === fieldName)
 }
 
 /**
