@@ -1,4 +1,4 @@
-import { FormStateKeyValues } from './formDefinition';
+import { FormStateKeyValues, ValidatorReturnStruct } from './formDefinition';
 
 export function minLength(length: number) {
   return function validateMinLength(value: string) {
@@ -52,11 +52,12 @@ export function isEmail(value: string) {
 }
 
 export function isAvailable(value: string) {
-  return;
-  // return new Promise((resolve) => {
-  //   setTimeout(() => {
-  //     console.log("done");
-  //     resolve();
-  //   }, 1000);
-  // });
+  return new Promise<ValidatorReturnStruct | undefined>((resolve) => {
+    setTimeout(() => {
+      resolve({
+        error: "isAvilable",
+        message: "is not available.",
+      });
+    }, 1000);
+  });
 }

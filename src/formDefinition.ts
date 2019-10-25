@@ -6,12 +6,12 @@ interface UseFormProps {
   errors?: FormError[]
 }
 
-interface ValidatorReturn {
+export interface ValidatorReturnStruct {
   error: string,
   message: string,
 }
 
-type Validator = (value: string, allValues: FormStateKeyValues) => ValidatorReturn | undefined
+type Validator = (value: string, allValues: FormStateKeyValues) => Promise<ValidatorReturnStruct | undefined> | ValidatorReturnStruct | undefined
 
 interface Validators {
   [key: string]: Validator[],
@@ -34,16 +34,23 @@ export function useForm(props: UseFormProps) {
       console.log("blur");
     },
     handleChange: (e) => {
+      function addAsyncError(error: FormError) {
+        updateState({
+          ...state,
+          errors: [...state.errors, error],
+        });
+      }
+
       const values = putState(state.values, e.target.name, e.target.value);
       const errors = [
-        ...performValidations(values, props.validations),
+        ...performValidations(values, props.validations, addAsyncError),
         ...filterStaleExternalErrors(externalErrors, values)
       ]
       const valid = !errors.length;
 
       const newState: FormState = {
+        ...state,
         values: values,
-        errors: errors,
         valid: valid,
       }
 
@@ -131,7 +138,11 @@ function putState(values: FormStateValues, key: string, value: any): FormStateVa
 /**
  *
  */
-function performValidations(values: FormStateValues, validations: Validators | undefined): FormError[] {
+function performValidations(
+  values: FormStateValues,
+  validations: Validators | undefined,
+  addAsyncError: (formError: FormError) => void,
+): FormError[] {
   if (!validations) return [];
 
   const allValues: FormStateKeyValues  = Object.entries(values)
@@ -143,10 +154,26 @@ function performValidations(values: FormStateValues, validations: Validators | u
     .reduce((errors: FormError[], [fieldName, validations]) => {
       const fieldValue = getValue(values[fieldName]);
 
-      return validations.reduce((errorList: FormError[], validation: Validator) => {
-        const error = validation(fieldValue, allValues);
+      return validations.reduce((errorList: FormError[], validator: Validator) => {
+        const error = validator(fieldValue, allValues);
 
-        if (error) {
+        if (!error) return errorList;
+
+        if (isPromise(error)) {
+          Promise.resolve(error).then((error) => {
+            if (!error) return;
+
+            const formError: FormError = {
+              ...error,
+              name: fieldName,
+              value: fieldValue,
+            };
+
+            addAsyncError(formError);
+          });
+
+          return errorList;
+        } else {
           const formError: FormError = {
             ...error,
             name: fieldName,
@@ -155,8 +182,6 @@ function performValidations(values: FormStateValues, validations: Validators | u
 
           return [...errorList, formError];
         }
-
-        return errorList;
       }, errors);
     }, []);
 }
@@ -184,4 +209,10 @@ export function isValid(form: FormDefinition): boolean {
 
 function filterStaleExternalErrors(errors: FormError[], values: FormStateValues): FormError[] {
   return errors.filter((error) => error.value === values[error.name].value);
+}
+
+function isPromise<T>(p: any): p is Promise<T>;
+function isPromise(p: any): p is Promise<any>;
+function isPromise<T>(p: any): p is Promise<T> {
+  return p !== null && typeof p === 'object' && typeof p.then === 'function';
 }

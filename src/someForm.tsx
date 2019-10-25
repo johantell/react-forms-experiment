@@ -13,15 +13,16 @@ export const SomeForm: React.FC = function SomeForm() {
     initialState: fetchedData,
     validations: {
       firstName: [
-        Validations.minLength(3),
-        Validations.isExact("Johan"),
+        // Validations.minLength(3),
+        // Validations.isExact("Johan"),
+        Validations.isAvailable,
       ],
       lastName: [
-        Validations.notEqualToField("firstName"),
+        // Validations.notEqualToField("firstName"),
       ],
       email: [
-        Validations.isPresent,
-        Validations.isEmail,
+        // Validations.isPresent,
+        // Validations.isEmail,
       ]
     },
     errors: [
