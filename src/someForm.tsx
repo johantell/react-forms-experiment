@@ -1,5 +1,6 @@
 import React from 'react';
-import { useForm, getState, getErrors, isValid } from './formDefinition';
+import { useForm, FormDefinition } from './formDefinition';
+import { getState, getErrors, isValid, isTouched } from './formDefinition/helpers';
 import * as Validations from './validations';
 
 const fetchedData = {
@@ -13,41 +14,53 @@ export const SomeForm: React.FC = function SomeForm() {
     initialState: fetchedData,
     validations: {
       firstName: [
-        // Validations.minLength(3),
-        // Validations.isExact("Johan"),
-        Validations.isAvailable,
+        Validations.minLength(3),
+        Validations.isExact("Johan"),
       ],
       lastName: [
-        // Validations.notEqualToField("firstName"),
+        Validations.notEqualToField("firstName"),
       ],
       email: [
-        // Validations.isPresent,
-        // Validations.isEmail,
+        Validations.isPresent,
+        Validations.isEmail,
       ]
     },
-    errors: [
-      {
-        name: "lastName",
-        value: "Trickery",
-        error: "Whatevererror",
-        message: "I can create my own errors"
-      }
-    ],
   });
 
   function handleSubmit(e: React.FormEvent<EventTarget>) {
     e.preventDefault();
 
-    console.log(e.target);
+    console.log("Submitting");
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <Form form={form} onSubmit={handleSubmit}>
       <FormInput form={form} name="firstName" type="text" />
       <FormInput form={form} name="lastName" type="text" />
       <FormInput form={form} name="email" type="text" />
 
       <button type="submit" disabled={!isValid(form)}>submit</button>
+    </Form>
+  )
+}
+
+interface FormProps {
+  form: FormDefinition,
+  onSubmit: (e: React.FormEvent<EventTarget>) => void,
+}
+
+const Form: React.FC<FormProps> = function Form(props) {
+  function handleSubmit(e: React.FormEvent<EventTarget>) {
+    e.preventDefault();
+
+    props.form.handleSubmit(e, {
+      onSuccess: props.onSubmit,
+    });
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      { props.children }
     </form>
   )
 }
@@ -75,7 +88,7 @@ function FormInput(props: FormInputProps) {
           defaultValue={getState(form, props.name)}
         />
       </label>
-      { inputErrors && inputErrors.map((error) => (
+      { isTouched(form, props.name) && inputErrors && inputErrors.map((error) => (
         <span key={error.error} className="error">{error.message}</span>
       ))}
     </div>

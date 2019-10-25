@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getValue } from './formDefinition/helpers';
 
 interface UseFormProps {
   initialState?: {[key: string]: any},
@@ -20,39 +21,61 @@ interface Validators {
 export function useForm(props: UseFormProps) {
   const externalErrors = props.errors || [];
 
-  const formState: FormState = {
+  const formState: FormState = externalErrors.reduce(putError, {
     values: transformInitialState(props.initialState),
-    errors: externalErrors,
+    errors: [],
     valid: !externalErrors.length,
-  };
+    touched: false,
+  });
 
   const [state, updateState] = useState(formState);
 
+  function addAsyncErrorFn(error: FormError) {
+    console.error("No async errors yet");
+  }
+
   const formDefinition: FormDefinition = {
     state: state,
+    handleSubmit: (e, options) => {
+      let newState = {...state, touched: true};
+
+      const validationErrors = performValidations(newState.values, props.validations, addAsyncErrorFn)
+      const filteredExternalErrors = filterStaleExternalErrors(externalErrors, newState.values);
+
+      newState = {...newState, errors: []};
+      newState = validationErrors.reduce(putError, newState);
+      newState = filteredExternalErrors.reduce(putError, newState);
+      newState = {...newState, valid: !newState.errors.length}
+
+      if (newState.valid) {
+        options.onSuccess(e);
+      }
+
+      updateState(newState);
+    },
     handleBlur: (e) => {
-      console.log("blur");
+      let newState: FormState = putValue(state, e.target.name, e.target.value, {setTouched: true});
+
+      const validationErrors = performValidations(newState.values, props.validations, addAsyncErrorFn)
+      const filteredExternalErrors = filterStaleExternalErrors(externalErrors, newState.values);
+
+      newState = {...newState, errors: []};
+      newState = validationErrors.reduce(putError, newState);
+      newState = filteredExternalErrors.reduce(putError, newState);
+      newState = {...newState, valid: !errorsOnTouchedFields(state).length}
+
+      updateState(newState);
     },
     handleChange: (e) => {
-      function addAsyncError(error: FormError) {
-        updateState({
-          ...state,
-          errors: [...state.errors, error],
-        });
-      }
+      let newState: FormState = putValue(state, e.target.name, e.target.value, {setTouched: false});
 
-      const values = putState(state.values, e.target.name, e.target.value);
-      const errors = [
-        ...performValidations(values, props.validations, addAsyncError),
-        ...filterStaleExternalErrors(externalErrors, values)
-      ]
-      const valid = !errors.length;
+      const validationErrors = performValidations(newState.values, props.validations, addAsyncErrorFn)
+      const filteredExternalErrors = filterStaleExternalErrors(externalErrors, newState.values);
 
-      const newState: FormState = {
-        ...state,
-        values: values,
-        valid: valid,
-      }
+      newState = {...newState, errors: []};
+      newState = validationErrors.reduce(putError, newState);
+      newState = filteredExternalErrors.reduce(putError, newState);
+      newState = {...newState, valid: !newState.errors.length};
 
       updateState(newState);
     },
@@ -61,78 +84,38 @@ export function useForm(props: UseFormProps) {
   return formDefinition;
 }
 
-interface FormDefinition {
-  handleChange: (e: any) => void,
-  handleBlur: (e: any) => void,
-  state: {[key: string]: any},
-}
-
-interface FormState {
-  values: FormStateValues,
-  errors: FormError[],
-  valid: boolean,
-}
-
-interface FormStateValues {
-  [key: string]: FormStateValue,
-}
- 
-export interface FormStateKeyValues {
-  [key: string]: string,
-}
- 
-
-export interface FormStateValue {
-  value: string,
-  touched?: boolean,
-}
-
-interface FormError {
-  name: string,
-  value: string,
-  error: string,
-  message: string,
-}
-
-interface ComponentProps {
-  handleSubmit: (e: any) => void
-}
-
-
 /**
  *
  */
-export function getState(form: FormDefinition, key: string) {
-  const valueObject = form.state.values[key];
-
-  return valueObject ? valueObject.value : null;
+interface PutValueOptions {
+  setTouched: boolean,
 }
 
-function getValue(valueObject: FormStateValue | undefined): string {
-  return valueObject ? valueObject.value : "";
+function putValue(
+  state: FormState,
+  key: string,
+  value: any,
+  options: PutValueOptions
+): FormState {
+  const valueObject = {
+    ...(state.values[key] || {}),
+    value: value,
+    touched: options.setTouched ? true : state.values[key].touched || false,
+  };
+
+  const values = { ...state.values, [key]: valueObject };
+
+  return {...state, values: values};
 }
 
-/**
- *
- */
-export function touched(form: FormDefinition, key: string) {
-  return !!form.state.values[key].touched;
-}
-
-/**
- *
- */
-export function getErrors(form: FormDefinition, fieldName: string): FormError[] {
-  return form.state.errors.filter(({ name }: FormError) => name === fieldName);
-}
-
-/**
- *
- */
-function putState(values: FormStateValues, key: string, value: any): FormStateValues {
-  const valueObject = values[key] || {};
-
-  return { ...values, [key]: { ...valueObject, value } };
+function putError(state: FormState, error: FormError): FormState {
+  return {
+    ...state,
+    errors: [
+      ...state.errors,
+      error
+    ]
+  };
 }
 
 /**
@@ -200,19 +183,67 @@ function transformInitialState(initialState: {[key: string]: string} | undefined
     }, {})
 }
 
-/**
- *
- */
-export function isValid(form: FormDefinition): boolean {
-  return form.state.valid;
-}
-
 function filterStaleExternalErrors(errors: FormError[], values: FormStateValues): FormError[] {
   return errors.filter((error) => error.value === values[error.name].value);
+}
+
+function errorsOnTouchedFields(state: FormState): FormError[] {
+  if (state.touched) return state.errors;
+
+  const touchedFields: string[] = Object.entries(state.values)
+    .reduce((acc: string[], [key, valueObject]) => {
+      if (!valueObject.touched) return acc;
+
+      return [...acc, key];
+    }, []);
+
+  return state.errors.filter((error: FormError) => touchedFields.includes(error.name));
 }
 
 function isPromise<T>(p: any): p is Promise<T>;
 function isPromise(p: any): p is Promise<any>;
 function isPromise<T>(p: any): p is Promise<T> {
   return p !== null && typeof p === 'object' && typeof p.then === 'function';
+}
+
+interface HandleSubmitOptions {
+  onSuccess: (e: any) => void,
+}
+
+export interface FormDefinition {
+  handleChange: (e: any) => void,
+  handleBlur: (e: any) => void,
+  handleSubmit: (e:any, options: HandleSubmitOptions) => void,
+  state: {[key: string]: any},
+}
+
+interface FormState {
+  values: FormStateValues,
+  errors: FormError[],
+  valid: boolean,
+  touched: boolean,
+}
+
+interface FormStateValues {
+  [key: string]: FormStateValue,
+}
+ 
+export interface FormStateKeyValues {
+  [key: string]: string,
+}
+
+export interface FormStateValue {
+  value: string,
+  touched?: boolean,
+}
+
+export interface FormError {
+  name: string,
+  value: string,
+  error: string,
+  message: string,
+}
+
+interface ComponentProps {
+  handleSubmit: (e: any) => void
 }
