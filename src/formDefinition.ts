@@ -12,7 +12,9 @@ export interface ValidatorReturnStruct {
   message: string,
 }
 
-type Validator = (value: string, allValues: FormStateKeyValues) => Promise<ValidatorReturnStruct | undefined> | ValidatorReturnStruct | undefined
+type Validator = (
+  value: string,
+  allValues: FormStateKeyValues) => Promise<ValidatorReturnStruct | undefined> | ValidatorReturnStruct | undefined
 
 interface Validators {
   [key: string]: Validator[],
@@ -39,49 +41,63 @@ export function useForm(props: UseFormProps) {
     handleSubmit: (e, options) => {
       let newState = {...state, touched: true};
 
-      const validationErrors = performValidations(newState.values, props.validations, addAsyncErrorFn)
-      const filteredExternalErrors = filterStaleExternalErrors(externalErrors, newState.values);
+      const validatedState = putValidationState(
+        newState,
+        addAsyncErrorFn,
+        externalErrors,
+        props.validations
+      );
 
-      newState = {...newState, errors: []};
-      newState = validationErrors.reduce(putError, newState);
-      newState = filteredExternalErrors.reduce(putError, newState);
-      newState = {...newState, valid: !newState.errors.length}
-
-      if (newState.valid) {
+      if (validatedState.valid) {
         options.onSuccess(e);
       }
 
-      updateState(newState);
+      updateState(validatedState);
     },
     handleBlur: (e) => {
       let newState: FormState = putValue(state, e.target.name, e.target.value, {setTouched: true});
 
-      const validationErrors = performValidations(newState.values, props.validations, addAsyncErrorFn)
-      const filteredExternalErrors = filterStaleExternalErrors(externalErrors, newState.values);
+      const validatedState = putValidationState(
+        newState,
+        addAsyncErrorFn,
+        externalErrors,
+        props.validations
+      );
 
-      newState = {...newState, errors: []};
-      newState = validationErrors.reduce(putError, newState);
-      newState = filteredExternalErrors.reduce(putError, newState);
-      newState = {...newState, valid: !errorsOnTouchedFields(state).length}
-
-      updateState(newState);
+      updateState(validatedState);
     },
     handleChange: (e) => {
       let newState: FormState = putValue(state, e.target.name, e.target.value, {setTouched: false});
 
-      const validationErrors = performValidations(newState.values, props.validations, addAsyncErrorFn)
-      const filteredExternalErrors = filterStaleExternalErrors(externalErrors, newState.values);
+      const validatedState = putValidationState(
+        newState,
+        addAsyncErrorFn,
+        externalErrors,
+        props.validations
+      );
 
-      newState = {...newState, errors: []};
-      newState = validationErrors.reduce(putError, newState);
-      newState = filteredExternalErrors.reduce(putError, newState);
-      newState = {...newState, valid: !newState.errors.length};
-
-      updateState(newState);
+      updateState(validatedState);
     },
   }
 
   return formDefinition;
+}
+
+function putValidationState(
+  state: FormState,
+  addAsyncErrorFn: AddAsyncErrorCallback,
+  externalErrors: FormError[],
+  validations?: Validators
+): FormState {
+  const validationErrors = performValidations(state.values, validations, addAsyncErrorFn)
+  const filteredExternalErrors = filterStaleExternalErrors(externalErrors, state.values);
+
+  let newState: FormState = {...state, errors: []};
+  newState = validationErrors.reduce(putError, newState);
+  newState = filteredExternalErrors.reduce(putError, newState);
+  newState = {...newState, valid: !errorsOnTouchedFields(newState).length};
+
+  return newState;
 }
 
 /**
@@ -118,13 +134,15 @@ function putError(state: FormState, error: FormError): FormState {
   };
 }
 
+type AddAsyncErrorCallback = (formError: FormError) => void;
+
 /**
  *
  */
 function performValidations(
   values: FormStateValues,
   validations: Validators | undefined,
-  addAsyncError: (formError: FormError) => void,
+  addAsyncError: AddAsyncErrorCallback,
 ): FormError[] {
   if (!validations) return [];
 
@@ -227,7 +245,7 @@ interface FormState {
 interface FormStateValues {
   [key: string]: FormStateValue,
 }
- 
+
 export interface FormStateKeyValues {
   [key: string]: string,
 }
